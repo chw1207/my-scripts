@@ -29,13 +29,14 @@ def get_parser():
 
     return parser
 
+
 def listdir(dir):
     filelist, tmplist = [], []
     for i in range(0, 4): # there are 3 layers after the directory of the sample name (crab defult?)
         lsInfo = subprocess.check_output("xrdfs %s ls %s" %(siteInfo[site][0], dir), shell = True)
         lsInfo_list = lsInfo.split("\n")
         del lsInfo_list[-1]
-        
+
         if (len(lsInfo_list) == 1):
             dir = lsInfo_list[0]
         if (i == 2 and len(lsInfo_list) != 1): # find the newest directory
@@ -50,7 +51,7 @@ def listdir(dir):
                 subprocess.check_output("rm -r %s/status_%s" %(os.getcwd(), sample), shell = True)
                 sys.exit(-1)
 
-            Time_ind = Time.index(max(Time)) 
+            Time_ind = Time.index(max(Time))
             dir = lsInfo_list[Time_ind]
         if (i == 3):
             tmplist = lsInfo_list
@@ -65,29 +66,32 @@ def listdir(dir):
     print("%i files are found in"%(len(filelist)))
     for k in tmplist:
         print("root://" + siteInfo[site][0] + k)
-    
+
     return filelist
+
 
 def copy(file):
     inpath = ""
     if (full == True):
         inpath = "root://" + siteInfo[site][0] + siteInfo[site][1] + source + "/" + file
-    else: 
+    else:
         inpath = "root://" + siteInfo[site][0] + file
 
     try:
         output = subprocess.check_output(["xrdcp", "-S", "15", '--silent', inpath, target+"/"+sample], stderr = subprocess.STDOUT)
-    
+
     except subprocess.CalledProcessError as error:
-        progress = file.replace(".root", ".txt")
-        with open("%s/status_%s/transfer_%i.txt" %(os.getcwd(), sample, ind[file]), "w") as f:
-            f.write("An error happens when it transfers %s\n" %file)
+        with open("%s/status_%s/transfer_%s.txt" %(os.getcwd(), sample, file.split("/")[-1]), "w") as f:
+            f.write("An error happened when it transfered %s\n" %file)
             f.write(error.output)
+            f.write("Please use the following command to retransfer the file!!!")
+            f.write("[command]: xrdcp -f {} {}".format(inpath, target+"/"+sample))
             f.close
+
 
 def main():
     pool = Pool(n)
-    for i in tqdm(pool.imap_unordered(copy, DL), total = len(DL)): 
+    for i in tqdm(pool.imap_unordered(copy, DL), total = len(DL)):
         pass
     pool.close()
     pool.join()
@@ -96,6 +100,7 @@ def main():
         subprocess.check_output("rm -r %s/status_%s" %(os.getcwd(), sample), shell = True)
     else:
         print("[ERROR information] %s/status_%s" %(os.getcwd(), sample))
+
 
 if __name__ == "__main__" :
     parser = get_parser()
@@ -115,8 +120,6 @@ if __name__ == "__main__" :
         print("[Creation] %s/%s" %(target, sample))
         os.makedirs("%s/%s" %(target, sample))
 
-    sys.stdout = open("%s/%s/transfer.log" %(target, sample), "w")
-
     DL = []
     if(full == True):
         fs = XRootDPyFS("root://"+ siteInfo[site][0] + siteInfo[site][1] + source)
@@ -125,12 +128,6 @@ if __name__ == "__main__" :
         print("root://" + siteInfo[site][0] + siteInfo[site][1] + source)
     else:
         DL = listdir(siteInfo[site][1] + source)
-    
-    Outp = [k for k in range(len(DL))]
-    zipObj = zip(DL, Outp)
-    ind = dict(zipObj)
-    
-    state = main()
-    sys.stdout.close()
 
+    state = main()
     sys.exit(state)
